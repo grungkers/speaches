@@ -27,7 +27,7 @@ class PyannoteModelManager:
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        pipeline = Pipeline.from_pretrained(model_id)
+        pipeline = Pipeline.from_pretrained(model_id, use_auth_token="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")
         pipeline.to(torch.device(device))
         return pipeline
 
