@@ -1,0 +1,49 @@
+stages:
+  - dockerize
+
+variables:
+  REGISTRY: artifactory-c4.bt.local/tne-registry
+  IMAGE_NAME: speaches
+  PLATFORMS: linux/amd64,linux/arm64
+
+.build-and-push-template:
+  stage: dockerize
+  image: gcr.io/kaniko-project/executor:debug
+  script:
+    - echo "Building image: IMAGE_NAME with base $BASE_IMAGE"
+    - echo "Logging in to registry"
+    - echo "$CI_JOB_TOKEN" | docker login $REGISTRY -u gitlab-ci-token --password-stdin
+    - /kaniko/executor \
+      --context $CI_PROJECT_DIR \
+      --dockerfile $CI_PROJECT_DIR/Dockerfile \
+      --destination $REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG$TAG_SUFFIX \
+      --destination $REGISTRY/$IMAGE_NAME:latest$TAG_SUFFIX \
+      --cache=true \
+      --cache-repo=$REGISTRY/$IMAGE_NAME-cache \
+      --build-arg BASE_IMAGE=$BASE_IMAGE \
+      --cache-copy-layers \
+      --platform=$PLATFORMS
+
+build-cuda-latest:
+  extends: .build-and-push-template
+  variables:
+  BASE_IMAGE: nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04
+  TAG_SUFFIX: -cuda
+
+build-cuda-12-6-3:
+  extends: .build-and-push-template
+  variables:
+  BASE_IMAGE: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+  TAG_SUFFIX: -cuda-12.6.3
+
+build-cuda-12-4-1:
+  extends: .build-and-push-template
+  variables:
+  BASE_IMAGE: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+  TAG_SUFFIX: -cuda-12.4.1
+
+build-cpu:
+  extends: .build-and-push-template
+  variables:
+  BASE_IMAGE: ubuntu:24.04
+  TAG_SUFFIX: -cpu
