@@ -20,6 +20,7 @@ ENV HOME=/home/ubuntu \
 WORKDIR $HOME/speaches
 # https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
 COPY --chown=ubuntu --from=ghcr.io/astral-sh/uv:0.8.22 /uv /bin/uv
+COPY --chown=ubuntu pyproject.toml uv.lock ./
 # NOTE: per https://docs.astral.sh/uv/guides/install-python, `uv` will automatically install the necessary python version
 # https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
 # https://docs.astral.sh/uv/guides/integration/docker/#compiling-bytecode
