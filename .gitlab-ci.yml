@@ -21,6 +21,7 @@ build-image:
         --destination "$REGISTRY/$IMAGE_NAME:latest-cuda" \
         --cache=true \
         --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache \
+        --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04" \
         --platform=linux/amd64 \
         --cache-copy-layers
 
