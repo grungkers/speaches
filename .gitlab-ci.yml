@@ -13,17 +13,15 @@ build-image:
     entrypoint: [""]
   script:
     - echo "Building image with Kaniko"
-    - |
-      /kaniko/executor \
-        --context ${CI_PROJECT_DIR} \
-        --dockerfile "$CI_PROJECT_DIR/Dockerfile" \
-        --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda" \
-        --destination "$REGISTRY/$IMAGE_NAME:latest-cuda" \
-        --cache=true \
-        --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache \
-        --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04" \
-        --platform=linux/amd64 \
-        --cache-copy-layers
+    - /kaniko/executor
+      --context ${CI_PROJECT_DIR}
+      --dockerfile "$CI_PROJECT_DIR/Dockerfile"
+      --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
+      --destination "$REGISTRY/$IMAGE_NAME:latest-cuda"
+      --cache=true
+      --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache
+      --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
+      --cache-copy-layers
 
 dev:
   extends: .deployment
