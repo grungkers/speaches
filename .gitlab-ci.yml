@@ -6,7 +6,7 @@ variables:
   REGISTRY: "artifactory-c4.bt.local/tne-registry"
   IMAGE_NAME: "speaches"
 
-build-and-push-template:
+build-image:
   stage: dockerize
   image:
     name: gcr.io/kaniko-project/executor:debug
@@ -14,6 +14,7 @@ build-and-push-template:
   script:
     - >
       /kaniko/executor
+      --context ${CI_PROJECT_DIR}
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
       --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
       --destination "$REGISTRY/$IMAGE_NAME:latest-cuda"
@@ -48,7 +49,7 @@ uat:
   extends: .dind
   image: artifactory-c4.bt.local/c4i-registry/pipeline:1.2.0
   dependencies:
-    - build-and-push-template
+    - build-image
   script:
     - | # SSH/SCP into the GPU server and update version
     - apt update
