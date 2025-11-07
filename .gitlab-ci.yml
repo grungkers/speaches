@@ -12,24 +12,17 @@ variables:
     name: "gcr.io/kaniko-project/executor:debug"
     entrypoint: [""]
   script:
-    - echo "Building image: $IMAGE_NAME with base $BASE_IMAGE"
     - echo "Logging in to registry"
     - echo "$CI_JOB_TOKEN" | docker login "$REGISTRY" -u gitlab-ci-token --password-stdin
     - >
       /kaniko/executor
       --context "$CI_PROJECT_DIR"
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
-      --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG$TAG_SUFFIX"
-      --destination "$REGISTRY/$IMAGE_NAME:latest$TAG_SUFFIX"
+      --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
+      --destination "$REGISTRY/$IMAGE_NAME:latest-cuda"
       --cache=true
       --cache-repo="$REGISTRY/$IMAGE_NAME-cache"
-      --build-arg "BASE_IMAGE=$BASE_IMAGE"
+      --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
       --cache-copy-layers
       --platform="$PLATFORMS"
       --no-push
-
-build-cuda-latest:
-  extends: .build-and-push-template
-  variables:
-    BASE_IMAGE: "nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
-    TAG_SUFFIX: "-cuda"
