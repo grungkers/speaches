@@ -24,9 +24,6 @@ build-and-push-template:
       --cache-copy-layers
       --platform=linux/amd64
       --cache-copy-layers
-  rules:
-    - if: '$BUILD_CICD_IMAGE == "true"'
-    - when: never
 
 
 dev:
