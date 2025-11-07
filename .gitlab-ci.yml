@@ -8,7 +8,7 @@ variables:
   IMAGE_NAME: "speaches"
 
 prepare-sdk:
-  image: $CI_REGISTRY/ai-cicd:357cbf3a
+  image: $REGISTRY/ai-cicd:357cbf3a
   stage: prepare
   script:
     - echo "Extracting version..."
