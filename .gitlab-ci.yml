@@ -4,11 +4,11 @@ stages:
   - deploy
 
 variables:
-  REGISTRY: "artifactory-c4.bt.local/tne-registry"
+  CI_REGISTRY: "artifactory-c4.bt.local/tne-registry"
   IMAGE_NAME: "speaches"
 
 prepare-sdk:
-  image: $REGISTRY/ai-cicd:357cbf3a
+  image: $CI_REGISTRY/ai-cicd:357cbf3a
   stage: prepare
   script:
     - echo "Extracting version..."
@@ -29,9 +29,9 @@ build-image:
     - /kaniko/executor
       --context ${CI_PROJECT_DIR}
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
-      --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
+      --destination "$CI_REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
       --destination $CI_REGISTRY/$IMAGE_NAME:$PYPROJECT_VERSION
-      --destination "$REGISTRY/$IMAGE_NAME:latest-cuda"
+      --destination "$CI_REGISTRY/$IMAGE_NAME:latest-cuda"
       --cache=true
       --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache
       --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
