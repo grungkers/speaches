@@ -41,6 +41,15 @@ uat:
   extends: .deployment
   environment: uat
 
+.dind:
+  services:
+    - name: docker:dind
+  variables:
+    # Instruct Testcontainers to use the daemon of DinD.
+    DOCKER_HOST: 'tcp://docker:2375'
+    DOCKER_TLS_CERTDIR: ''
+    DOCKER_DRIVER: overlay2 # Improve performance with overlayfs.
+
 .deployment:
   stage: deploy
   extends: .dind
