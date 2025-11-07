@@ -1,6 +1,6 @@
 services:
   opentelemetry-collector:
-    image: otel/opentelemetry-collector-contrib:0.135.0
+    image: otel/opentelemetry-collector-contrib:0.136.0
     command: ["--config=/etc/opentelemetry-collector.yaml"]
     volumes:
       - ./configuration/opentelemetry-collector.yaml:/etc/opentelemetry-collector.yaml
@@ -51,7 +51,7 @@ services:
       timeout: 5s
       retries: 3
   grafana:
-    image: grafana/grafana:12.1.1
+    image: grafana/grafana:12.2.0
     volumes:
       - ./configuration/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
       - grafana-data:/var/lib/grafana

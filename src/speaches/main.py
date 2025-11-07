@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 
 from fastapi import (
     FastAPI,
+    HTTPException,
+    Request,
+    Response,
+)
+from fastapi.exception_handlers import (
+    http_exception_handler,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import RedirectResponse
 
 from speaches.dependencies import ApiKeyDependency, get_config
@@ -61,21 +69,17 @@ def create_app() -> FastAPI:
 
     logger.debug(f"Config: {config}")
 
-    dependencies = []
-    if config.api_key is not None:
-        dependencies.append(ApiKeyDependency)
-
+    # Create main app WITHOUT global authentication
     app = FastAPI(
-        dependencies=dependencies,
         title="Speaches",
-        version="v0.8.2",  # TODO: update this on release
+        version="0.8.3",  # TODO: update this on release
         license_info={"name": "MIT License", "identifier": "MIT"},
         openapi_tags=TAGS_METADATA,
     )
 
     # Register global exception handler for APIProxyError
     @app.exception_handler(APIProxyError)
-    async def api_proxy_error_handler(request, exc: APIProxyError) -> JSONResponse:  # noqa: ANN001, ARG001
+    async def _api_proxy_error_handler(_request: Request, exc: APIProxyError) -> JSONResponse:
         error_id = str(uuid.uuid4())
         logger.exception(f"[{{error_id}}] {exc.message}")
         content = {
@@ -84,21 +88,33 @@ def create_app() -> FastAPI:
             "suggested_fixes": exc.suggestions,
             "error_id": error_id,
         }
-        import os
 
+        # HACK: replace with something else
         log_level = os.getenv("SPEACHES_LOG_LEVEL", "INFO").upper()
         if log_level == "DEBUG" and exc.debug:
             content["debug"] = exc.debug
         return JSONResponse(status_code=exc.status_code, content=content)
 
-    app.include_router(chat_router)
-    app.include_router(stt_router)
-    app.include_router(models_router)
-    app.include_router(misc_router)
-    app.include_router(realtime_rtc_router)
+    @app.exception_handler(StarletteHTTPException)
+    async def _custom_http_exception_handler(request: Request, exc: HTTPException) -> Response:
+        logger.error(f"HTTP error: {exc}")
+        return await http_exception_handler(request, exc)
+
+    # HTTP routers WITH authentication (if API key is configured)
+    http_dependencies = []
+    if config.api_key is not None:
+        http_dependencies.append(ApiKeyDependency)
+
+    app.include_router(chat_router, dependencies=http_dependencies)
+    app.include_router(stt_router, dependencies=http_dependencies)
+    app.include_router(models_router, dependencies=http_dependencies)
+    app.include_router(misc_router, dependencies=http_dependencies)
+    app.include_router(realtime_rtc_router, dependencies=http_dependencies)
+    app.include_router(speech_router, dependencies=http_dependencies)
+    app.include_router(vad_router, dependencies=http_dependencies)
+
+    # WebSocket router WITHOUT authentication (handles its own)
     app.include_router(realtime_ws_router)
-    app.include_router(speech_router)
-    app.include_router(vad_router)
 
     # HACK: move this elsewhere
     app.get("/v1/realtime", include_in_schema=False)(lambda: RedirectResponse(url="/v1/realtime/"))

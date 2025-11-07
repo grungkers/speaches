@@ -21,6 +21,7 @@ from openai.resources.chat.completions import AsyncCompletions
 
 from speaches.config import Config
 from speaches.executors.kokoro.model_manager import KokoroModelManager
+from speaches.executors.parakeet.model_manager import ParakeetModelManager
 from speaches.executors.piper.model_manager import PiperModelManager
 from speaches.executors.pyannote.model_manager import PyannoteModelManager
 from speaches.executors.whisper.model_manager import WhisperModelManager
@@ -41,18 +42,18 @@ ConfigDependency = Annotated[Config, Depends(get_config)]
 
 
 @lru_cache
-def get_model_manager() -> WhisperModelManager:
+def get_whisper_model_manager() -> WhisperModelManager:
     config = get_config()
-    return WhisperModelManager(config.whisper)
+    return WhisperModelManager(config.stt_model_ttl, config.whisper)
 
 
-WhisperModelManagerDependency = Annotated[WhisperModelManager, Depends(get_model_manager)]
+WhisperModelManagerDependency = Annotated[WhisperModelManager, Depends(get_whisper_model_manager)]
 
 
 @lru_cache
 def get_piper_model_manager() -> PiperModelManager:
     config = get_config()
-    return PiperModelManager(config.whisper.ttl, config.unstable_ort_opts)  # HACK: should have its own config
+    return PiperModelManager(config.tts_model_ttl, config.unstable_ort_opts)
 
 
 PiperModelManagerDependency = Annotated[PiperModelManager, Depends(get_piper_model_manager)]
@@ -61,11 +62,21 @@ PiperModelManagerDependency = Annotated[PiperModelManager, Depends(get_piper_mod
 @lru_cache
 def get_kokoro_model_manager() -> KokoroModelManager:
     config = get_config()
-    return KokoroModelManager(config.whisper.ttl, config.unstable_ort_opts)  # HACK: should have its own config
+    return KokoroModelManager(config.tts_model_ttl, config.unstable_ort_opts)
 
 
 KokoroModelManagerDependency = Annotated[KokoroModelManager, Depends(get_kokoro_model_manager)]
 
+
+@lru_cache
+def get_parakeet_model_manager() -> ParakeetModelManager:
+    config = get_config()
+    return ParakeetModelManager(config.stt_model_ttl, config.unstable_ort_opts)
+
+
+ParakeetModelManagerDependency = Annotated[ParakeetModelManager, Depends(get_parakeet_model_manager)]
+
+security = HTTPBearer(auto_error=False)
 
 @lru_cache
 def get_pyannote_model_manager() -> PyannoteModelManager:
@@ -79,10 +90,10 @@ security = HTTPBearer()
 
 
 async def verify_api_key(
-    config: ConfigDependency, credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+    config: ConfigDependency, credentials: HTTPAuthorizationCredentials | None = Depends(security)
 ) -> None:
     assert config.api_key is not None
-    if credentials.credentials != config.api_key.get_secret_value():
+    if credentials is None or credentials.credentials != config.api_key.get_secret_value():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
 

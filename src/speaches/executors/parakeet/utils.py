@@ -1,9 +1,10 @@
 from collections.abc import Generator
 import logging
 from pathlib import Path
+from typing import TypedDict
 
 import huggingface_hub
-from pydantic import BaseModel
+from onnx_asr.models import NemoConformerTdt
 
 from speaches.api_types import Model
 from speaches.hf_utils import (
@@ -15,25 +16,30 @@ from speaches.hf_utils import (
 )
 from speaches.model_registry import ModelRegistry
 
-LIBRARY_NAME = "ctranslate2"
+# TODO: support model quants
+
+# LIBRARY_NAME = "onnx" # NOTE: library name is derived and not stored in the README
 TASK_NAME_TAG = "automatic-speech-recognition"
+# TAGS = {"nemo-conformer-tdt"} # NOTE: I've tried to use this tag however it seems to be derived (likely from config.json) and isn't present when parsing the local model card
 
 logger = logging.getLogger(__name__)
 
 hf_model_filter = HfModelFilter(
-    library_name=LIBRARY_NAME,
+    model_name="istupakov/parakeet-tdt",
+    # library_name=LIBRARY_NAME,
     task=TASK_NAME_TAG,
+    # tags=TAGS,
 )
 
 
-class WhisperModelFiles(BaseModel):
-    model: Path
+class NemoConformerTdtModelFiles(TypedDict):
+    encoder: Path
+    decoder_joint: Path
+    vocab: Path
     config: Path
-    tokenizer: Path
-    preprocessor_config: Path
 
 
-class WhisperModelRegistry(ModelRegistry[Model, WhisperModelFiles]):
+class NemoConformerTdtModelRegistry(ModelRegistry[Model, NemoConformerTdtModelFiles]):
     def list_remote_models(self) -> Generator[Model, None, None]:
         models = huggingface_hub.list_models(**self.hf_model_filter.list_model_kwargs(), cardData=True)
         for model in models:
@@ -61,37 +67,29 @@ class WhisperModelRegistry(ModelRegistry[Model, WhisperModelFiles]):
                     task=TASK_NAME_TAG,
                 )
 
-    def get_model_files(self, model_id: str) -> WhisperModelFiles:
+    def get_model_files(self, model_id: str) -> NemoConformerTdtModelFiles:
         model_files = list(list_model_files(model_id))
 
-        # the necessary files are specified in `faster_whisper.transcribe`
-        model_file_path = next(file_path for file_path in model_files if file_path.name == "model.bin")
-        config_file_path = next(
-            file_path for file_path in model_files if file_path.name == "config.json"
-        )  # NOTE: I don't think this file is used
-        tokenizer_file_path = next(file_path for file_path in model_files if file_path.name == "tokenizer.json")
-        preprocessor_config_file_path = next(
-            file_path for file_path in model_files if file_path.name == "preprocessor_config.json"
+        encoder_file_path = next(file_path for file_path in model_files if file_path.name == "encoder-model.onnx")
+        decoder_joint_file_path = next(
+            file_path for file_path in model_files if file_path.name == "decoder_joint-model.onnx"
         )
-        return WhisperModelFiles(
-            model=model_file_path,
+        vocab_file_path = next(file_path for file_path in model_files if file_path.name == "vocab.txt")
+        config_file_path = next(file_path for file_path in model_files if file_path.name == "config.json")
+
+        return NemoConformerTdtModelFiles(
+            encoder=encoder_file_path,
+            decoder_joint=decoder_joint_file_path,
+            vocab=vocab_file_path,
             config=config_file_path,
-            tokenizer=tokenizer_file_path,
-            preprocessor_config=preprocessor_config_file_path,
         )
 
     def download_model_files(self, model_id: str) -> None:
-        # Taken from faster_whisper/utils.py
-        allow_patterns = [
-            "config.json",
-            "preprocessor_config.json",
-            "model.bin",
-            "tokenizer.json",
-            "vocabulary.*",
-        ]
+        allow_patterns = list(NemoConformerTdt._get_model_files(quantization=None).values())  # noqa: SLF001
+
         _model_repo_path_str = huggingface_hub.snapshot_download(
             repo_id=model_id, repo_type="model", allow_patterns=[*allow_patterns, "README.md"]
         )
 
 
-model_registry = WhisperModelRegistry(hf_model_filter=hf_model_filter)
+model_registry = NemoConformerTdtModelRegistry(hf_model_filter=hf_model_filter)

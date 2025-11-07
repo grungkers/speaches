@@ -25,10 +25,11 @@ from speaches.api_types import (
 from speaches.dependencies import (
     AudioFileDependency,
     ConfigDependency,
+    ParakeetModelManagerDependency,
     PyannoteModelManagerDependency,
     WhisperModelManagerDependency,
 )
-from speaches.executors.pyannote.utils import run_diarization
+from speaches.executors.parakeet import utils as nemo_conformer_tdt_utils
 from speaches.executors.whisper import utils as whisper_utils
 from speaches.hf_utils import (
     MODEL_CARD_DOESNT_EXISTS_ERROR_MESSAGE,
@@ -111,8 +112,8 @@ def segments_to_streaming_response(
 )
 def translate_file(
     config: ConfigDependency,
-    model_manager: WhisperModelManagerDependency,
     pyannote_manager: PyannoteModelManagerDependency,
+    whisper_model_manager: WhisperModelManagerDependency,
     audio: AudioFileDependency,
     model: Annotated[ModelId, Form()],
     prompt: Annotated[str | None, Form()] = None,
@@ -122,7 +123,7 @@ def translate_file(
     vad_filter: Annotated[bool | None, Form()] = None,
     diarization: Annotated[bool | None, Form()] = None,
 ) -> Response | StreamingResponse:
-    # Use config defaults if not explicitly provided
+    # Use config default if vad_filter not explicitly provided
     effective_vad_filter = vad_filter if vad_filter is not None else config._unstable_vad_filter  # noqa: SLF001
     effective_diarization = diarization if diarization is not None else config._unstable_diarization  # noqa: SLF001
 
@@ -132,7 +133,7 @@ def translate_file(
         with pyannote_manager.load_model("pyannote/speaker-diarization-3.1") as pipeline:
             speaker_segments = run_diarization(audio, pipeline)
 
-    with model_manager.load_model(model) as whisper:
+    with whisper_model_manager.load_model(model) as whisper:
         whisper_model = BatchedInferencePipeline(model=whisper) if config.whisper.use_batched_mode else whisper
         segments, transcription_info = whisper_model.transcribe(
             audio,
@@ -167,10 +168,11 @@ async def get_timestamp_granularities(request: Request) -> TimestampGranularitie
     "/v1/audio/transcriptions",
     response_model=str | CreateTranscriptionResponseJson | CreateTranscriptionResponseVerboseJson,
 )
-def transcribe_file(
+def transcribe_file(  # noqa: C901
     config: ConfigDependency,
     model_manager: WhisperModelManagerDependency,
-    pyannote_manager: PyannoteModelManagerDependency,
+    whisper_model_manager: WhisperModelManagerDependency,
+    parakeet_model_manager: ParakeetModelManagerDependency,
     request: Request,
     audio: AudioFileDependency,
     model: Annotated[ModelId, Form()],
@@ -186,9 +188,10 @@ def transcribe_file(
     stream: Annotated[bool, Form()] = False,
     hotwords: Annotated[str | None, Form()] = None,
     vad_filter: Annotated[bool | None, Form()] = None,
+    without_timestamps: Annotated[bool | None, Form()] = None,
     diarization: Annotated[bool | None, Form()] = None,
 ) -> Response | StreamingResponse:
-    # Use config defaults if not explicitly provided
+    # Use config default if vad_filter not explicitly provided
     effective_vad_filter = vad_filter if vad_filter is not None else config._unstable_vad_filter  # noqa: SLF001
     effective_diarization = diarization if diarization is not None else config._unstable_diarization  # noqa: SLF001
 
@@ -217,8 +220,8 @@ def transcribe_file(
             status_code=500,
             detail=MODEL_CARD_DOESNT_EXISTS_ERROR_MESSAGE.format(model_id=model),
         )
-    if whisper_utils.hf_model_filter.passes_filter(model_card_data):
-        with model_manager.load_model(model) as whisper:
+    if whisper_utils.hf_model_filter.passes_filter(model, model_card_data):
+        with whisper_model_manager.load_model(model) as whisper:
             whisper_model = BatchedInferencePipeline(model=whisper) if config.whisper.use_batched_mode else whisper
             segments, transcription_info = whisper_model.transcribe(
                 audio,
@@ -229,6 +232,7 @@ def transcribe_file(
                 temperature=temperature,
                 vad_filter=effective_vad_filter,
                 hotwords=hotwords,
+                without_timestamps=without_timestamps,
             )
             segments = TranscriptionSegment.from_faster_whisper_segments(segments, speaker_segments)
 
@@ -236,6 +240,27 @@ def transcribe_file(
                 return segments_to_streaming_response(segments, transcription_info, response_format)
             else:
                 return segments_to_response(segments, transcription_info, response_format)
+    elif nemo_conformer_tdt_utils.hf_model_filter.passes_filter(model, model_card_data):
+        if stream:
+            raise HTTPException(status_code=500, detail=f"Model '{model}' does not support streaming yet.")
+        if response_format not in ("text", "json"):
+            raise HTTPException(
+                status_code=500, detail=f"Model '{model}' only supports 'text' and 'json' response formats for now."
+            )
+        with parakeet_model_manager.load_model(model) as parakeet:
+            # TODO: issue warnings when client specifies unsupported parameters like `prompt`, `temperature`, `hotwords`, etc.
+            timestamped_result = parakeet.with_timestamps().recognize(audio)
+
+            match response_format:
+                case "text":
+                    return Response(timestamped_result.text, media_type="text/plain")
+                case "json":
+                    return Response(
+                        CreateTranscriptionResponseJson(
+                            text=timestamped_result.text,
+                        ).model_dump_json(),
+                        media_type="application/json",
+                    )
     else:
         raise HTTPException(
             status_code=404,
