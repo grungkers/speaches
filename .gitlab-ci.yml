@@ -14,7 +14,6 @@ build-and-push-template:
   script:
     - >
       /kaniko/executor
-      --context "$CI_PROJECT_DIR"
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
       --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
       --destination "$REGISTRY/$IMAGE_NAME:latest-cuda"
@@ -22,8 +21,6 @@ build-and-push-template:
       --cache-repo="$REGISTRY/$IMAGE_NAME-cache"
       --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
       --cache-copy-layers
-      --cache-copy-layers
-
 
 dev:
   extends: .deployment
