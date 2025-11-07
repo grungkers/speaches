@@ -12,7 +12,7 @@ prepare-sdk:
   stage: prepare
   script:
     - echo "Extracting version..."
-    - PYPROJECT_VERSION=$(python -c "import toml; print(toml.load('${CI_PROJECT_DIR}/agent/pyproject.toml')['project']['version'])")
+    - PYPROJECT_VERSION=$(python -c "import toml; print(toml.load('${CI_PROJECT_DIR}/pyproject.toml')['project']['version'])")
     - echo "PYPROJECT_VERSION=$PYPROJECT_VERSION" >> version.env
   artifacts:
     reports:
