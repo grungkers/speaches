@@ -6,7 +6,7 @@ variables:
   IMAGE_NAME: "speaches"
   PLATFORMS: "linux/amd64,linux/arm64"
 
-.build-and-push-template:
+build-and-push-template:
   stage: dockerize
   image:
     name: "gcr.io/kaniko-project/executor:debug"
