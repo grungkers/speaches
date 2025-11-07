@@ -1,19 +1,17 @@
 stages:
   - dockerize
+  - deploy
 
 variables:
   REGISTRY: "artifactory-c4.bt.local/tne-registry"
   IMAGE_NAME: "speaches"
-  PLATFORMS: "linux/amd64,linux/arm64"
 
 build-and-push-template:
   stage: dockerize
   image:
-    name: "gcr.io/kaniko-project/executor:debug"
+    name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
   script:
-    - echo "Logging in to registry"
-    - echo "$CI_JOB_TOKEN" | docker login "$REGISTRY" -u gitlab-ci-token --password-stdin
     - >
       /kaniko/executor
       --context "$CI_PROJECT_DIR"
@@ -24,5 +22,41 @@ build-and-push-template:
       --cache-repo="$REGISTRY/$IMAGE_NAME-cache"
       --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
       --cache-copy-layers
-      --platform="$PLATFORMS"
-      --no-push
+      --platform=linux/amd64
+      --cache-copy-layers
+  rules:
+    - if: '$BUILD_CICD_IMAGE == "true"'
+    - when: never
+
+
+dev:
+  extends: .deployment
+  environment: dev
+
+staging:
+  extends: .deployment
+  environment: staging
+
+uat:
+  extends: .deployment
+  environment: uat
+
+.deployment:
+  stage: deploy
+  extends: .dind
+  image: artifactory-c4.bt.local/c4i-registry/pipeline:1.2.0
+  dependencies:
+    - build-and-push-template
+  script:
+    - | # SSH/SCP into the GPU server and update version
+    - apt update
+    - apt install -y sshpass
+    - |
+      sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -tt $SSH_USER@$SERVER '
+        cd phobos-ai
+        echo "$CI_REGISTRY_PASSWORD" | docker login --username $CI_REGISTRY_USER --password-stdin artifactory-c4.bt.local
+        docker compose pull
+        docker compose up -d
+      '
+  when: manual
+  allow_failure: true
