@@ -13,6 +13,7 @@ build-image:
     entrypoint: [""]
   script:
     - echo "Building image with Kaniko"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login --username $CI_REGISTRY_USER --password-stdin artifactory-c4.bt.local
     - /kaniko/executor
       --context ${CI_PROJECT_DIR}
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
