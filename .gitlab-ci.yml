@@ -22,7 +22,6 @@ build-and-push-template:
       --cache-repo="$REGISTRY/$IMAGE_NAME-cache"
       --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
       --cache-copy-layers
-      --platform=linux/amd64
       --cache-copy-layers
 
 
