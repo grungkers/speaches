@@ -26,11 +26,11 @@ build-image:
     entrypoint: [""]
   script:
     - echo "Building image with Kaniko"
-    - echo "$CI_REGISTRY_PASSWORD" | docker login --username $CI_REGISTRY_USER --password-stdin artifactory-c4.bt.local
     - /kaniko/executor
       --context ${CI_PROJECT_DIR}
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
       --destination "$REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
+      --destination $CI_REGISTRY/$IMAGE_NAME:$PYPROJECT_VERSION
       --destination "$REGISTRY/$IMAGE_NAME:latest-cuda"
       --cache=true
       --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache
