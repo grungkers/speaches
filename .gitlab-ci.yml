@@ -27,23 +27,23 @@ variables:
 build-cuda-latest:
   extends: .build-and-push-template
   variables:
-  BASE_IMAGE: nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04
-  TAG_SUFFIX: -cuda
+    BASE_IMAGE: nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04
+    TAG_SUFFIX: -cuda
 
 build-cuda-12-6-3:
   extends: .build-and-push-template
   variables:
-  BASE_IMAGE: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
-  TAG_SUFFIX: -cuda-12.6.3
+    BASE_IMAGE: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+    TAG_SUFFIX: -cuda-12.6.3
 
 build-cuda-12-4-1:
   extends: .build-and-push-template
   variables:
-  BASE_IMAGE: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
-  TAG_SUFFIX: -cuda-12.4.1
+    BASE_IMAGE: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+    TAG_SUFFIX: -cuda-12.4.1
 
 build-cpu:
   extends: .build-and-push-template
   variables:
-  BASE_IMAGE: ubuntu:24.04
-  TAG_SUFFIX: -cpu
+    BASE_IMAGE: ubuntu:24.04
+    TAG_SUFFIX: -cpu
