@@ -30,6 +30,7 @@ from speaches.dependencies import (
     WhisperModelManagerDependency,
 )
 from speaches.executors.parakeet import utils as nemo_conformer_tdt_utils
+from speaches.executors.pyannote.utils import run_diarization
 from speaches.executors.whisper import utils as whisper_utils
 from speaches.hf_utils import (
     MODEL_CARD_DOESNT_EXISTS_ERROR_MESSAGE,
@@ -170,7 +171,7 @@ async def get_timestamp_granularities(request: Request) -> TimestampGranularitie
 )
 def transcribe_file(  # noqa: C901
     config: ConfigDependency,
-    model_manager: WhisperModelManagerDependency,
+    pyannote_manager: PyannoteModelManagerDependency,
     whisper_model_manager: WhisperModelManagerDependency,
     parakeet_model_manager: ParakeetModelManagerDependency,
     request: Request,
