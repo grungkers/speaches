@@ -1,4 +1,5 @@
 import asyncio
+import os
 from collections.abc import Generator, Iterable
 import logging
 from typing import Annotated, Literal
@@ -131,7 +132,7 @@ def translate_file(
     # Run diarization if enabled
     speaker_segments = None
     if effective_diarization:
-        with pyannote_manager.load_model("pyannote/speaker-diarization-3.1") as pipeline:
+        with pyannote_manager.load_model("pyannote/speaker-diarization-community-1", token=os.getenv("HF_TOKEN")) as pipeline:
             speaker_segments = run_diarization(audio, pipeline)
 
     with whisper_model_manager.load_model(model) as whisper:
@@ -205,7 +206,7 @@ def transcribe_file(  # noqa: C901
     # Run diarization if enabled
     speaker_segments = None
     if effective_diarization:
-        with pyannote_manager.load_model("pyannote/speaker-diarization-3.1") as pipeline:
+        with pyannote_manager.load_model("pyannote/speaker-diarization-community-1", token=os.getenv("HF_TOKEN")) as pipeline:
             speaker_segments = run_diarization(audio, pipeline)
 
     model_repo_path = get_model_repo_path(model)

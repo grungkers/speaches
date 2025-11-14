@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import OrderedDict
 import logging
 import threading
@@ -27,7 +28,7 @@ class PyannoteModelManager:
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        pipeline = Pipeline.from_pretrained(model_id, use_auth_token="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")
+        pipeline = Pipeline.from_pretrained(model_id, token=os.getenv("HF_TOKEN"))
         pipeline.to(torch.device(device))
         return pipeline
 
