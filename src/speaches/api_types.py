@@ -1,9 +1,10 @@
 from collections.abc import Iterable
 from typing import Literal
-
+import numpy as np
 import faster_whisper.transcribe
+from pyannote.core import Annotation
 from pydantic import BaseModel, ConfigDict
-
+import pandas as pd
 from speaches.text_utils import segments_to_text
 
 
@@ -52,42 +53,51 @@ class TranscriptionSegment(BaseModel):
 
     @classmethod
     def from_faster_whisper_segments(
-        cls, segments: Iterable[faster_whisper.transcribe.Segment], diarization: dict[tuple[float, float], str] | None = None
+        cls, segments: Iterable[faster_whisper.transcribe.Segment], diarization: list[dict]
     ) -> Iterable["TranscriptionSegment"]:
         for segment in segments:
             speaker = None
             if diarization:
+                fill_nearest = False
+                diarize_df = pd.DataFrame(diarization)
                 # Find speaker for this segment based on timing overlap
-                for (start, end), segment_speaker in diarization.items():
-                    if start <= segment.start < end or start < segment.end <= end:
-                        speaker = segment_speaker
-                        break
+                # assign speaker to segment (if any)
+                diarize_df['intersection'] = np.minimum(diarize_df['end'], segment.end) - np.maximum(diarize_df['start'], segment.start)
+                diarize_df['union'] = np.maximum(diarize_df['end'], segment.end) - np.minimum(diarize_df['start'], segment.start)
+                # remove no hit, otherwise we look for closest (even negative intersection...)
+                if not fill_nearest:
+                    dia_tmp = diarize_df[diarize_df['intersection'] > 0]
+                else:
+                    dia_tmp = diarize_df
+                if len(dia_tmp) > 0:
+                    # sum over speakers
+                    speaker = dia_tmp.groupby("speaker")["intersection"].sum().sort_values(ascending=False).index[0]
 
             yield cls(
-                id=segment.id,
-                seek=segment.seek,
-                start=segment.start,
-                end=segment.end,
-                text=segment.text,
-                tokens=segment.tokens,
-                temperature=segment.temperature or 0,  # FIX: hardcoded
-                avg_logprob=segment.avg_logprob,
-                compression_ratio=segment.compression_ratio,
-                no_speech_prob=segment.no_speech_prob,
-                speaker=speaker,
-                words=[
-                    TranscriptionWord(
-                        start=word.start,
-                        end=word.end,
-                        word=word.word,
-                        probability=word.probability,
-                        speaker=speaker,  # Assign same speaker to all words in segment
-                    )
-                    for word in segment.words
-                ]
-                if segment.words is not None
-                else None,
-            )
+                    id=segment.id,
+                    seek=segment.seek,
+                    start=segment.start,
+                    end=segment.end,
+                    text=segment.text,
+                    tokens=segment.tokens,
+                    temperature=segment.temperature or 0,  # FIX: hardcoded
+                    avg_logprob=segment.avg_logprob,
+                    compression_ratio=segment.compression_ratio,
+                    no_speech_prob=segment.no_speech_prob,
+                    speaker=speaker,
+                    words=[
+                        TranscriptionWord(
+                            start=word.start,
+                            end=word.end,
+                            word=word.word,
+                            probability=word.probability,
+                            speaker=speaker,  # Assign same speaker to all words in segment
+                        )
+                        for word in segment.words
+                    ]
+                    if segment.words is not None
+                    else None,
+                )
 
 
 # https://platform.openai.com/docs/api-reference/audio/json-object
