@@ -29,12 +29,12 @@ build-image:
     - /kaniko/executor
       --context ${CI_PROJECT_DIR}
       --dockerfile "$CI_PROJECT_DIR/Dockerfile"
-      --destination "$CI_REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cuda"
+      --destination "$CI_REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cpu"
       --destination $CI_REGISTRY/$IMAGE_NAME:$PYPROJECT_VERSION
-      --destination "$CI_REGISTRY/$IMAGE_NAME:latest-cuda"
+      --destination "$CI_REGISTRY/$IMAGE_NAME:latest-cpu"
       --cache=true
       --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache
-      --build-arg "BASE_IMAGE=nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04"
+      --build-arg "BASE_IMAGE=ubuntu:24.04"
       --cache-copy-layers
 
 dev:
