@@ -1,7 +1,7 @@
 stages:
   - prepare
   - dockerize
-  - deploy
+#  - deploy
 
 variables:
   APP: speaches
@@ -42,17 +42,17 @@ build-image:
         --import-cache type=registry,ref=$IMAGE:buildcache \
         --output type=image,name=$IMAGE:$TAG,push=true
 
-dev:
-  extends: .deployment
-  environment: dev
-
-staging:
-  extends: .deployment
-  environment: staging
-
-uat:
-  extends: .deployment
-  environment: uat
+#dev:
+#  extends: .deployment
+#  environment: dev
+#
+#staging:
+#  extends: .deployment
+#  environment: staging
+#
+#uat:
+#  extends: .deployment
+#  environment: uat
 
 .build_and_push_image:
   stage: push
@@ -60,22 +60,22 @@ uat:
     name: $DOCKER_REPO/$DOCKER_REPO_NAME/tne-aws-buildkit-ecr-helper:1.0
     entrypoint: [""]
 
-.deployment:
-  stage: deploy
-  extends: .dind
-  image: artifactory-c4.bt.local/c4i-registry/pipeline:1.2.0
-  dependencies:
-    - build-image
-  script:
-    - | # SSH/SCP into the GPU server and update version
-    - apt update
-    - apt install -y sshpass
-    - |
-      sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -tt $SSH_USER@$SERVER '
-        cd phobos-ai
-        echo "$CI_REGISTRY_PASSWORD" | docker login --username $CI_REGISTRY_USER --password-stdin artifactory-c4.bt.local
-        docker compose pull
-        docker compose up -d
-      '
-  when: manual
-  allow_failure: true
+#.deployment:
+#  stage: deploy
+#  extends: .dind
+#  image: artifactory-c4.bt.local/c4i-registry/pipeline:1.2.0
+#  dependencies:
+#    - build-image
+#  script:
+#    - | # SSH/SCP into the GPU server and update version
+#    - apt update
+#    - apt install -y sshpass
+#    - |
+#      sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -tt $SSH_USER@$SERVER '
+#        cd phobos-ai
+#        echo "$CI_REGISTRY_PASSWORD" | docker login --username $CI_REGISTRY_USER --password-stdin artifactory-c4.bt.local
+#        docker compose pull
+#        docker compose up -d
+#      '
+#  when: manual
+#  allow_failure: true
