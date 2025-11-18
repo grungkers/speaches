@@ -1,5 +1,4 @@
 stages:
-  - prepare
   - dockerize
 #  - deploy
 
@@ -12,19 +11,6 @@ variables:
   DOCKER_REPO_NAME: tne
   IMAGE_LOCAL: $DOCKER_REPO/$DOCKER_REPO_NAME/$APP
 
-
-prepare-sdk:
-  image: $CI_REGISTRY/ai-cicd:357cbf3a
-  stage: prepare
-  script:
-    - echo "Extracting version..."
-    - PYPROJECT_VERSION=$(python -c "import toml; print(toml.load('${CI_PROJECT_DIR}/pyproject.toml')['project']['version'])")
-    - echo "PYPROJECT_VERSION=$PYPROJECT_VERSION" >> version.env
-  artifacts:
-    reports:
-      dotenv:
-        - version.env
-
 build-image:
   stage: dockerize
   tags: ["aldar-cellular"]
@@ -35,9 +21,10 @@ build-image:
   script:
     - |
       buildctl-daemonless.sh build \
+        --frontend dockerfile.v0 \
         --local context=. \
         --local dockerfile=. \
-        --build-arg "BASE_IMAGE=ubuntu:24.04"
+        --opt build-arg:BASE_IMAGE=ubuntu:24.04 \
         --export-cache type=registry,ref=$IMAGE:buildcache \
         --import-cache type=registry,ref=$IMAGE:buildcache \
         --output type=image,name=$IMAGE:$TAG,push=true
