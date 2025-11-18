@@ -4,8 +4,14 @@ stages:
   - deploy
 
 variables:
-  CI_REGISTRY: "artifactory-c4.bt.local/tne-registry"
-  IMAGE_NAME: "speaches"
+  APP: speaches
+  IMAGE: $AWS_REGISTRY/$APP # Image repository in AWS ECR
+  AWS_DEFAULT_REGION: ap-south-1
+  BUILD: $CI_PIPELINE_IID
+  DOCKER_REPO: cellular-docker.aldar-artifactory.internal
+  DOCKER_REPO_NAME: tne
+  IMAGE_LOCAL: $DOCKER_REPO/$DOCKER_REPO_NAME/$APP
+
 
 prepare-sdk:
   image: $CI_REGISTRY/ai-cicd:357cbf3a
@@ -21,21 +27,20 @@ prepare-sdk:
 
 build-image:
   stage: dockerize
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
+  tags: ["aldar-cellular"]
+  extends: .build_and_push_image
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - echo "Building image with Kaniko"
-    - /kaniko/executor
-      --context ${CI_PROJECT_DIR}
-      --dockerfile "$CI_PROJECT_DIR/Dockerfile"
-      --destination "$CI_REGISTRY/$IMAGE_NAME:$CI_COMMIT_REF_SLUG-cpu"
-      --destination $CI_REGISTRY/$IMAGE_NAME:$PYPROJECT_VERSION
-      --destination "$CI_REGISTRY/$IMAGE_NAME:latest-cpu"
-      --cache=true
-      --cache-repo=$CI_REGISTRY/$IMAGE_NAME-cache
-      --build-arg "BASE_IMAGE=ubuntu:24.04"
-      --cache-copy-layers
+    - |
+      buildctl-daemonless.sh build \
+        --local context=. \
+        --local dockerfile=. \
+        --build-arg "BASE_IMAGE=ubuntu:24.04"
+        --export-cache type=registry,ref=$IMAGE:buildcache \
+        --import-cache type=registry,ref=$IMAGE:buildcache \
+        --output type=image,name=$IMAGE:$TAG,push=true
 
 dev:
   extends: .deployment
@@ -49,14 +54,11 @@ uat:
   extends: .deployment
   environment: uat
 
-.dind:
-  services:
-    - name: docker:dind
-  variables:
-    # Instruct Testcontainers to use the daemon of DinD.
-    DOCKER_HOST: 'tcp://docker:2375'
-    DOCKER_TLS_CERTDIR: ''
-    DOCKER_DRIVER: overlay2 # Improve performance with overlayfs.
+.build_and_push_image:
+  stage: push
+  image:
+    name: $DOCKER_REPO/$DOCKER_REPO_NAME/tne-aws-buildkit-ecr-helper:1.0
+    entrypoint: [""]
 
 .deployment:
   stage: deploy
