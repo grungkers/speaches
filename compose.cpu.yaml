@@ -5,7 +5,7 @@ services:
     extends:
       file: compose.yaml
       service: speaches
-    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    image: artifactory-c4.bt.local/tne-registry/speaches:latest-cpu
     build:
       args:
         BASE_IMAGE: ubuntu:24.04
