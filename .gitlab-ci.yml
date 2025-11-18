@@ -3,6 +3,7 @@ stages:
 #  - deploy
 
 variables:
+  TAG: latest-cpu
   APP: speaches
   IMAGE: $AWS_REGISTRY/$APP # Image repository in AWS ECR
   AWS_DEFAULT_REGION: ap-south-1
