@@ -20,13 +20,13 @@ build-image:
     entrypoint: [""]
   script:
     - buildctl-daemonless.sh build 
-        --frontend dockerfile.v0 
-        --local context=. 
-        --local dockerfile=. 
-        --opt build-arg:BASE_IMAGE=ubuntu:24.04 
-        --export-cache type=registry,ref=$IMAGE:buildcache 
-        --import-cache type=registry,ref=$IMAGE:buildcache 
-        --output type=image,name=$IMAGE:$TAG,push=true
+      --frontend dockerfile.v0 
+      --local context=. 
+      --local dockerfile=. 
+      --opt build-arg:BASE_IMAGE=ubuntu:24.04 
+      --export-cache type=registry,ref=$IMAGE:buildcache 
+      --import-cache type=registry,ref=$IMAGE:buildcache 
+      --output type=image,name=$IMAGE:$TAG,push=true
   rules:
   - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
