@@ -15,20 +15,21 @@ variables:
 build-image:
   stage: dockerize
   tags: ["aldar-cellular"]
-  extends: .build_and_push_image
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  image:
+    name: $DOCKER_REPO/$DOCKER_REPO_NAME/tne-aws-buildkit-ecr-helper:1.0
+    entrypoint: [""]
   script:
-    - |
-      buildctl-daemonless.sh build \
-        --frontend dockerfile.v0 \
-        --local context=. \
-        --local dockerfile=. \
-        --opt build-arg:BASE_IMAGE=ubuntu:24.04 \
-        --export-cache type=registry,ref=$IMAGE:buildcache \
-        --import-cache type=registry,ref=$IMAGE:buildcache \
+    - buildctl-daemonless.sh build 
+        --frontend dockerfile.v0 
+        --local context=. 
+        --local dockerfile=. 
+        --opt build-arg:BASE_IMAGE=ubuntu:24.04 
+        --export-cache type=registry,ref=$IMAGE:buildcache 
+        --import-cache type=registry,ref=$IMAGE:buildcache 
         --output type=image,name=$IMAGE:$TAG,push=true
+  rules:
+  - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 #dev:
 #  extends: .deployment
@@ -41,12 +42,6 @@ build-image:
 #uat:
 #  extends: .deployment
 #  environment: uat
-
-.build_and_push_image:
-  stage: push
-  image:
-    name: $DOCKER_REPO/$DOCKER_REPO_NAME/tne-aws-buildkit-ecr-helper:1.0
-    entrypoint: [""]
 
 #.deployment:
 #  stage: deploy
