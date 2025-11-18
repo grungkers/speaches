@@ -1,13 +1,9 @@
-import io
 import logging
 
-import torchaudio
+import torch
 from numpy import float32
 from numpy.typing import NDArray
 from pyannote.audio import Pipeline
-from pyannote.core import Annotation
-import soundfile as sf
-from pyannote.audio.pipelines.speaker_diarization import DiarizeOutput
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +20,8 @@ def run_diarization(audio: NDArray[float32], pipeline: Pipeline, sample_rate: in
         Dictionary mapping (start_time, end_time) tuples to speaker labels
     """
     logger.debug("Running speaker diarization")
-
-    # Convert numpy array to audio format that pyannote can process
-    # Create an in-memory file-like object
-    buffer = io.BytesIO()
-    sf.write(buffer, audio, sample_rate, format="WAV")
-    buffer.seek(0)
-
-    # 2. Load buffer with torchaudio (returns tensor)
-    waveform, sr = torchaudio.load(buffer)
     # Run diarization
-    output = pipeline({"waveform": waveform, "sample_rate": sr})
+    output = pipeline({"waveform": torch.from_numpy(audio[None, :]), "sample_rate": sample_rate})
 
     # Convert pyannote output to our format
     speaker_segments = []
