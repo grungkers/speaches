@@ -99,13 +99,48 @@ async def verify_api_key(
 
 ApiKeyDependency = Depends(verify_api_key)
 
+import io
+import av
+from pydub import AudioSegment
+from typing import BinaryIO, Tuple
+
+
+def convert_to_16k(file: BinaryIO) -> Tuple[int, io.BytesIO]:
+    """
+    Convert audio to 16 kHz and return:
+        (layout, audio_buffer)
+    Works with FastAPI UploadFile.file
+    """
+    file.seek(0)
+    file_bytes = io.BytesIO(file.read())
+    file_bytes.seek(0)
+
+    container = av.open(file_bytes)
+    stream = container.streams.audio[0]
+    num_channels = stream.codec_context.channels
+    file_bytes.seek(0)
+
+    sample_rate = stream.codec_context.sample_rate  # e.g., 44100, 16000
+
+    is_16k = sample_rate == 16000
+    if is_16k:
+        audio = AudioSegment.from_file(file_bytes)
+        audio_16k = audio.set_frame_rate(16000)
+
+        file_bytes = io.BytesIO()
+        audio_16k.export(file_bytes, format="wav")
+        file_bytes.seek(0)
+
+    return num_channels, file_bytes
 
 # TODO: test async vs sync performance
 def audio_file_dependency(
     file: Annotated[UploadFile, Form()],
 ) -> NDArray[float32]:
     try:
-        audio = decode_audio(file.file)
+        num_channels, audio_16k = convert_to_16k(file.file)
+        audio = decode_audio(audio_16k, split_stereo=num_channels == 2)
+
     except av.error.InvalidDataError as e:
         raise HTTPException(
             status_code=415,

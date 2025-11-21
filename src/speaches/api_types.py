@@ -1,10 +1,11 @@
 from collections.abc import Iterable
 from typing import Literal
-import numpy as np
+
 import faster_whisper.transcribe
-from pyannote.core import Annotation
-from pydantic import BaseModel, ConfigDict
+import numpy as np
 import pandas as pd
+from pydantic import BaseModel, ConfigDict
+
 from speaches.text_utils import segments_to_text
 
 
@@ -44,7 +45,7 @@ class TranscriptionSegment(BaseModel):
     start: float
     temperature: float
     text: str
-    tokens: list[int]
+    tokens: list[int] | None = None
     words: (
         list[TranscriptionWord] | None
     )  # TODO: why is here? It's not a field defined in the [OpenAI API spec](https://platform.openai.com/docs/api-reference/audio/verbose-json-object)
@@ -55,50 +56,114 @@ class TranscriptionSegment(BaseModel):
     def from_faster_whisper_segments(
         cls, segments: Iterable[faster_whisper.transcribe.Segment], diarization: list[dict]
     ) -> Iterable["TranscriptionSegment"]:
+        diarize_df = pd.DataFrame(diarization)
         for segment in segments:
-            speaker = None
-            if diarization:
-                fill_nearest = False
-                diarize_df = pd.DataFrame(diarization)
-                # Find speaker for this segment based on timing overlap
-                # assign speaker to segment (if any)
-                diarize_df['intersection'] = np.minimum(diarize_df['end'], segment.end) - np.maximum(diarize_df['start'], segment.start)
-                diarize_df['union'] = np.maximum(diarize_df['end'], segment.end) - np.minimum(diarize_df['start'], segment.start)
-                # remove no hit, otherwise we look for closest (even negative intersection...)
-                if not fill_nearest:
-                    dia_tmp = diarize_df[diarize_df['intersection'] > 0]
-                else:
-                    dia_tmp = diarize_df
-                if len(dia_tmp) > 0:
-                    # sum over speakers
-                    speaker = dia_tmp.groupby("speaker")["intersection"].sum().sort_values(ascending=False).index[0]
-
+            speaker = assign_speaker(diarize_df, segment.start, segment.end)
             yield cls(
-                    id=segment.id,
-                    seek=segment.seek,
-                    start=segment.start,
-                    end=segment.end,
-                    text=segment.text,
-                    tokens=segment.tokens,
-                    temperature=segment.temperature or 0,  # FIX: hardcoded
-                    avg_logprob=segment.avg_logprob,
-                    compression_ratio=segment.compression_ratio,
-                    no_speech_prob=segment.no_speech_prob,
-                    speaker=speaker,
-                    words=[
-                        TranscriptionWord(
-                            start=word.start,
-                            end=word.end,
-                            word=word.word,
-                            probability=word.probability,
-                            speaker=speaker,  # Assign same speaker to all words in segment
-                        )
-                        for word in segment.words
-                    ]
-                    if segment.words is not None
-                    else None,
-                )
+                id=segment.id,
+                seek=segment.seek,
+                start=segment.start,
+                end=segment.end,
+                text=segment.text,
+                temperature=segment.temperature or 0,  # FIX: hardcoded
+                avg_logprob=segment.avg_logprob,
+                compression_ratio=segment.compression_ratio,
+                no_speech_prob=segment.no_speech_prob,
+                speaker=speaker,
+                words=[
+                    TranscriptionWord(
+                        start=word.start,
+                        end=word.end,
+                        word=word.word,
+                        probability=word.probability,
+                        speaker=speaker,
+                    )
+                    for word in segment.words
+                ]
+                if segment.words is not None
+                else None,
+            )
 
+    @classmethod
+    def regenerate_segments(
+            cls, segments: Iterable["TranscriptionSegment"],
+            min_silence: float = 0.5
+    ) -> Iterable["TranscriptionSegment"]:
+        # 1. Flatten all words
+        all_words = []
+        for seg in segments:
+            if seg.words:
+                all_words.extend(seg.words)
+
+        all_words.sort(key=lambda w: w.start)
+
+        # 2. Group words into new segments
+        new_segments = []
+        current_words = []
+        seg_id = 0
+
+        for i, word in enumerate(all_words):
+            if not current_words:
+                current_words.append(word)
+                continue
+
+            last_word = current_words[-1]
+            # Check for silence or speaker change
+            if (word.start - last_word.end) > min_silence or word.speaker != last_word.speaker:
+                # create a new segment
+                seg_id += 1
+                new_seg = TranscriptionSegment(
+                    avg_logprob=sum(w.probability for w in current_words) / len(current_words),
+                    compression_ratio=1.0,  # could compute if needed
+                    start=current_words[0].start,
+                    end=current_words[-1].end,
+                    id=seg_id,
+                    no_speech_prob=0.0,
+                    seek=0,
+                    temperature=0.0,
+                    text="".join(w.word for w in current_words),
+                    words=current_words.copy(),
+                    speaker=current_words[0].speaker
+                )
+                new_segments.append(new_seg)
+                current_words = [word]
+            else:
+                current_words.append(word)
+
+        # Add last segment
+        if current_words:
+            seg_id += 1
+            new_segments.append(
+                TranscriptionSegment(
+                    avg_logprob=sum(w.probability for w in current_words) / len(current_words),
+                    compression_ratio=1.0,
+                    start=current_words[0].start,
+                    end=current_words[-1].end,
+                    id=seg_id,
+                    no_speech_prob=0.0,
+                    seek=0,
+                    temperature=0.0,
+                    text="".join(w.word for w in current_words),
+                    words=current_words.copy(),
+                    speaker=current_words[0].speaker
+                )
+            )
+
+        return new_segments
+
+
+def assign_speaker(df, start, end):
+    """Return speaker label based on overlap with diarization."""
+    if df is None or len(df) == 0:
+        return None
+
+    df["intersection"] = np.minimum(df["end"], end) - np.maximum(df["start"], start)
+    df["intersection"] = df["intersection"].clip(lower=0)
+
+    if df["intersection"].sum() == 0:
+        return None
+
+    return df.groupby("speaker")["intersection"].sum().idxmax()
 
 # https://platform.openai.com/docs/api-reference/audio/json-object
 # https://github.com/openai/openai-openapi/blob/master/openapi.yaml#L10924
@@ -122,10 +187,12 @@ class CreateTranscriptionResponseVerboseJson(BaseModel):
     text: str
     words: list[TranscriptionWord] | None
     segments: list[TranscriptionSegment]
+    speaker_segments: list[dict] | None = None,
 
     @classmethod
     def from_segment(
-        cls, segment: TranscriptionSegment, transcription_info: faster_whisper.transcribe.TranscriptionInfo
+        cls, segment: TranscriptionSegment, transcription_info: faster_whisper.transcribe.TranscriptionInfo,
+        speaker_segments: list[dict] | None = None,
     ) -> "CreateTranscriptionResponseVerboseJson":
         return cls(
             language=transcription_info.language,
@@ -133,11 +200,14 @@ class CreateTranscriptionResponseVerboseJson(BaseModel):
             text=segment.text,
             words=segment.words if transcription_info.transcription_options.word_timestamps else None,
             segments=[segment],
+            speaker_segments=speaker_segments,
         )
 
     @classmethod
     def from_segments(
-        cls, segments: list[TranscriptionSegment], transcription_info: faster_whisper.transcribe.TranscriptionInfo
+        cls, segments: list[TranscriptionSegment], transcription_info: faster_whisper.transcribe.TranscriptionInfo,
+        speaker_segments: list[dict] | None = None,
+        is_stereo: bool = False,
     ) -> "CreateTranscriptionResponseVerboseJson":
         return cls(
             language=transcription_info.language,
@@ -147,6 +217,7 @@ class CreateTranscriptionResponseVerboseJson(BaseModel):
             words=TranscriptionWord.from_segments(segments)
             if transcription_info.transcription_options.word_timestamps
             else None,
+            speaker_segments=speaker_segments,
         )
 
 

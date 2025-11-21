@@ -1,7 +1,8 @@
 import asyncio
-import os
-from collections.abc import Generator, Iterable
+import itertools
 import logging
+from collections import defaultdict
+from collections.abc import Generator, Iterable
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -49,12 +50,14 @@ type ResponseFormat = Literal["text", "json", "verbose_json", "srt", "vtt"]
 
 # https://platform.openai.com/docs/api-reference/audio/createTranscription#audio-createtranscription-response_format
 DEFAULT_RESPONSE_FORMAT: ResponseFormat = "json"
+MIN_SILENCE_DURATION_MS = 250
 
 
 def segments_to_response(
     segments: Iterable[TranscriptionSegment],
     transcription_info: TranscriptionInfo,
     response_format: ResponseFormat,
+    speaker_segments: list[dict] | None = None,
 ) -> Response:
     segments = list(segments)
     match response_format:
@@ -67,7 +70,7 @@ def segments_to_response(
             )
         case "verbose_json":
             return Response(
-                CreateTranscriptionResponseVerboseJson.from_segments(segments, transcription_info).model_dump_json(),
+                CreateTranscriptionResponseVerboseJson.from_segments(segments, transcription_info, speaker_segments).model_dump_json(),
                 media_type="application/json",
             )
         case "vtt":
@@ -88,6 +91,7 @@ def segments_to_streaming_response(
     segments: Iterable[TranscriptionSegment],
     transcription_info: TranscriptionInfo,
     response_format: ResponseFormat,
+    speaker_segments: list[dict] | None = None,
 ) -> StreamingResponse:
     def segment_responses() -> Generator[str, None, None]:
         for i, segment in enumerate(segments):
@@ -97,7 +101,7 @@ def segments_to_streaming_response(
                 data = CreateTranscriptionResponseJson.from_segments([segment]).model_dump_json()
             elif response_format == "verbose_json":
                 data = CreateTranscriptionResponseVerboseJson.from_segment(
-                    segment, transcription_info
+                    segment, transcription_info, speaker_segments
                 ).model_dump_json()
             elif response_format == "vtt":
                 data = segments_to_vtt(segment, i)
@@ -116,6 +120,7 @@ def translate_file(
     config: ConfigDependency,
     pyannote_manager: PyannoteModelManagerDependency,
     whisper_model_manager: WhisperModelManagerDependency,
+    request: Request,
     audio: AudioFileDependency,
     model: Annotated[ModelId, Form()],
     prompt: Annotated[str | None, Form()] = None,
@@ -128,7 +133,13 @@ def translate_file(
     # Use config default if vad_filter not explicitly provided
     effective_vad_filter = vad_filter if vad_filter is not None else config._unstable_vad_filter  # noqa: SLF001
     effective_diarization = diarization if diarization is not None else config._unstable_diarization  # noqa: SLF001
+    timestamp_granularities = asyncio.run(get_timestamp_granularities(request))
 
+    if isinstance(audio, tuple):
+        left, right = audio
+        channels = [left, right]
+    else:
+        channels = [audio]
     # Run diarization if enabled
     speaker_segments = None
     if effective_diarization:
@@ -137,19 +148,41 @@ def translate_file(
 
     with whisper_model_manager.load_model(model) as whisper:
         whisper_model = BatchedInferencePipeline(model=whisper) if config.whisper.use_batched_mode else whisper
-        segments, transcription_info = whisper_model.transcribe(
-            audio,
-            task="translate",
-            initial_prompt=prompt,
-            temperature=temperature,
-            vad_filter=effective_vad_filter,
-        )
-        segments = TranscriptionSegment.from_faster_whisper_segments(segments, speaker_segments)
+        all_set_segments = []
+        all_transcription_info = []
+        for ch_audio in channels:
+            segments, transcription_info = whisper_model.transcribe(
+                ch_audio,
+                task="translate",
+                initial_prompt=prompt,
+                temperature=temperature,
+                word_timestamps="word" in timestamp_granularities,
+                vad_filter=effective_vad_filter,
+                vad_parameters=dict(min_silence_duration_ms=MIN_SILENCE_DURATION_MS),
+            )
+            all_transcription_info.append(transcription_info)
+            all_set_segments.append(segments)
+
+        grouped = defaultdict(list)
+        for seg in speaker_segments:
+            grouped[seg["speaker"]].append(seg)
+        diarize_groups = list(grouped.values())
+
+        all_segments = []
+        if len(all_set_segments) == 2:
+            all_set_segments = [list(g) for g in all_set_segments]
+            all_set_segments.sort(key=lambda group: group[0].start)
+            for idx, segment in enumerate(all_set_segments):
+                all_segments.extend(TranscriptionSegment.from_faster_whisper_segments(segment, diarize_groups[idx]))
+            all_segments = TranscriptionSegment.regenerate_segments(all_segments)
+        else:
+            all_segments = list(itertools.chain(*[list(g) for g in all_set_segments]))
+            all_segments = TranscriptionSegment.from_faster_whisper_segments(all_segments, speaker_segments)
 
         if stream:
-            return segments_to_streaming_response(segments, transcription_info, response_format)
+            return segments_to_streaming_response(all_segments, transcription_info, response_format, speaker_segments)
         else:
-            return segments_to_response(segments, transcription_info, response_format)
+            return segments_to_response(all_segments, transcription_info, response_format, speaker_segments)
 
 
 # HACK: Since Form() doesn't support `alias`, we need to use a workaround.
@@ -225,23 +258,51 @@ def transcribe_file(  # noqa: C901
     if whisper_utils.hf_model_filter.passes_filter(model, model_card_data):
         with whisper_model_manager.load_model(model) as whisper:
             whisper_model = BatchedInferencePipeline(model=whisper) if config.whisper.use_batched_mode else whisper
-            segments, transcription_info = whisper_model.transcribe(
-                audio,
-                task="transcribe",
-                language=language,
-                initial_prompt=prompt,
-                word_timestamps="word" in timestamp_granularities,
-                temperature=temperature,
-                vad_filter=effective_vad_filter,
-                hotwords=hotwords,
-                without_timestamps=without_timestamps,
-            )
-            segments = TranscriptionSegment.from_faster_whisper_segments(segments, speaker_segments)
+            # Check if audio is stereo (tuple returned by decode_audio)
+            if isinstance(audio, tuple):
+                left, right = audio
+                channels = [left, right]
+            else:
+                channels = [audio]
+
+            all_set_segments = []
+            all_transcription_info = []
+            for ch_audio in channels:
+                segments, transcription_info = whisper_model.transcribe(
+                    ch_audio,
+                    task="transcribe",
+                    language=language,
+                    initial_prompt=prompt,
+                    word_timestamps="word" in timestamp_granularities,
+                    temperature=temperature,
+                    vad_filter=effective_vad_filter,
+                    vad_parameters=dict(min_silence_duration_ms=MIN_SILENCE_DURATION_MS),
+                    hotwords=hotwords,
+                    without_timestamps=without_timestamps,
+                )
+                all_transcription_info.append(transcription_info)
+                all_set_segments.append(segments)
+
+            grouped = defaultdict(list)
+            for seg in speaker_segments:
+                grouped[seg["speaker"]].append(seg)
+            diarize_groups = list(grouped.values())
+
+            all_segments = []
+            if len(all_set_segments) == 2:
+                all_set_segments = [list(g) for g in all_set_segments]
+                all_set_segments.sort(key=lambda group: group[0].start)
+                for idx, segment in enumerate(all_set_segments):
+                    all_segments.extend(TranscriptionSegment.from_faster_whisper_segments(segment, diarize_groups[idx]))
+                all_segments = TranscriptionSegment.regenerate_segments(all_segments)
+            else:
+                all_segments = list(itertools.chain(*[list(g) for g in all_set_segments]))
+                all_segments = TranscriptionSegment.from_faster_whisper_segments(all_segments, speaker_segments)
 
             if stream:
-                return segments_to_streaming_response(segments, transcription_info, response_format)
+                return segments_to_streaming_response(all_segments, transcription_info, response_format, speaker_segments)
             else:
-                return segments_to_response(segments, transcription_info, response_format)
+                return segments_to_response(all_segments, transcription_info, response_format, speaker_segments)
     elif nemo_conformer_tdt_utils.hf_model_filter.passes_filter(model, model_card_data):
         if stream:
             raise HTTPException(status_code=500, detail=f"Model '{model}' does not support streaming yet.")
