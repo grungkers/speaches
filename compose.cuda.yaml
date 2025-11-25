@@ -2,14 +2,8 @@
 #   - compose.observability.yaml
 services:
   speaches:
-    extends:
-      file: compose.yaml
-      service: speaches
     # NOTE: slightly older cuda version is available under 'latest-cuda-12.4.1' and `latest-cuda-12.6.3` tags
-    image: artifactory-c4.bt.local/tne-registry/speaches:latest-cuda-12.6.3
-    build:
-      args:
-        BASE_IMAGE: nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04
+    image: cellular-docker.aldar-artifactory.internal/tne/speaches:latest-cuda
     volumes:
       - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub
     deploy:

@@ -1,9 +1,9 @@
 stages:
   - dockerize
-#  - deploy
+  - deploy
 
 variables:
-  TAG: latest-cpu
+  TAG: latest-cuda
   APP: speaches
   IMAGE: $AWS_REGISTRY/$APP # Image repository in AWS ECR
   AWS_DEFAULT_REGION: ap-south-1
@@ -23,9 +23,8 @@ build-image:
       --frontend dockerfile.v0 
       --local context=. 
       --local dockerfile=. 
-      --opt build-arg:BASE_IMAGE=ubuntu:24.04 
-      --export-cache type=registry,ref=$IMAGE:buildcache 
-      --import-cache type=registry,ref=$IMAGE:buildcache 
+      --export-cache type=registry,ref=$IMAGE:buildcache
+      --import-cache type=registry,ref=$IMAGE:buildcache
       --output type=image,name=$IMAGE:$TAG,push=true
   rules:
   - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -34,6 +33,11 @@ build-image:
 #dev:
 #  extends: .deployment
 #  environment: dev
+#  parallel:
+#    matrix:
+#      - SERVERS: [ 3.111.186.247 ]
+#      - USER: tne
+#      - KEY: beam7beam7
 #
 #staging:
 #  extends: .deployment
@@ -42,23 +46,20 @@ build-image:
 #uat:
 #  extends: .deployment
 #  environment: uat
-
+#
+## =========================
+## Section: Job Templates
+## =========================
 #.deployment:
+#  image: linuxserver/openssh-server
 #  stage: deploy
-#  extends: .dind
-#  image: artifactory-c4.bt.local/c4i-registry/pipeline:1.2.0
-#  dependencies:
-#    - build-image
+#  before_script:
+#    - echo $KEY | base64 -d > key && chmod 600 key
 #  script:
-#    - | # SSH/SCP into the GPU server and update version
-#    - apt update
-#    - apt install -y sshpass
-#    - |
-#      sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -tt $SSH_USER@$SERVER '
-#        cd phobos-ai
-#        echo "$CI_REGISTRY_PASSWORD" | docker login --username $CI_REGISTRY_USER --password-stdin artifactory-c4.bt.local
-#        docker compose pull
-#        docker compose up -d
-#      '
+#    - echo "Deploying to $SERVERS"
+#    - ssh -i key -o StrictHostKeyChecking=no $USER@$SERVERS "
+#      AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_REGISTRY;
+#      VERSION=$TAG docker compose up -d --pull always"
+#    - echo "Deployed Version - $TAG"
 #  when: manual
 #  allow_failure: true
