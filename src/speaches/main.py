@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 
+import torch
 from fastapi import (
     FastAPI,
     HTTPException,
@@ -76,6 +77,12 @@ def create_app() -> FastAPI:
         license_info={"name": "MIT License", "identifier": "MIT"},
         openapi_tags=TAGS_METADATA,
     )
+
+
+    if torch.cuda.is_available():
+        logger.debug(f"CUDA is available: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.debug("CUDA not available, using CPU")
 
     # Register global exception handler for APIProxyError
     @app.exception_handler(APIProxyError)
