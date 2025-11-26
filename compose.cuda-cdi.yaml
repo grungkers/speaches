@@ -6,7 +6,7 @@
 services:
   speaches:
     extends:
-      file: compose.cuda.yaml
+      file: compose.cuda-jetson.yaml
       service: speaches
     volumes:
       - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub
