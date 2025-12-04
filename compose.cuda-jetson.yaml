@@ -7,9 +7,6 @@ services:
       service: speaches
     # NOTE: slightly older cuda version is available under 'latest-cuda-12.4.1' and `latest-cuda-12.6.3` tags
     image: cellular-docker.aldar-artifactory.internal/tne/speaches:latest-cuda-13
-    build:
-      args:
-        BASE_IMAGE: nvidia/cuda:13.0.0-cudnn-runtime-ubuntu24.04
     volumes:
       - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub
     deploy:

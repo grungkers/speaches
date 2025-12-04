@@ -1,15 +1,16 @@
 services:
   speaches:
     container_name: speaches
-    build:
-      dockerfile: Dockerfile
-      context: .
-      platforms:
-        - linux/amd64
-        - linux/arm64
     restart: unless-stopped
     ports:
       - 8000:8000
+    environment:
+      - ALLOW_ORIGINS=["http://localhost:9000"]
+      - ENABLE_UI=False
+      - HF_TOKEN=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
+      - PYANNOTE_METRICS_ENABLED=0
+      - PYTHONDEBUG=1
+      - PYTHONUNBUFFERED=1
     develop:
       watch:
         - action: rebuild
