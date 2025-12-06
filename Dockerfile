@@ -4,13 +4,9 @@ FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/speaches-ai/speaches"
 LABEL org.opencontainers.image.licenses="MIT"
 
-USER ubuntu
-ENV HOME=/home/ubuntu \
-    PATH=/home/ubuntu/.local/bin:$PATH
-
 WORKDIR $HOME/speaches
 COPY --chown=ubuntu . .
-RUN uv pip install .[ui] --upgrade-strategy only-if-needed
+RUN uv pip install .[ui] --no-upgrade
 RUN uv pip list -n speaches-env
 
 RUN mkdir -p $HOME/.cache/huggingface/hub
@@ -23,4 +19,4 @@ ENV GRADIO_ANALYTICS_ENABLED="False"
 ENV DISABLE_TELEMETRY=1
 ENV HF_HUB_DISABLE_TELEMETRY=1
 EXPOSE 8000
-CMD ["conda", "run", "--no-capture-output", "-n", "speaches-env", "uvicorn", "--factory", "speaches.main:create_app"]
+CMD ["python3", "-m", "uvicorn", "--factory", "speaches.main:create_app"]
