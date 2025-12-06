@@ -1,13 +1,13 @@
-ARG BASE_IMAGE=torchcodec:r36.4.tegra-aarch64-cp312-cu126-24.04
+ARG BASE_IMAGE=torchaudio:r36.4.tegra-aarch64-cp312-cu126-24.04
 # hadolint ignore=DL3006
 FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/speaches-ai/speaches"
 LABEL org.opencontainers.image.licenses="MIT"
-
+ENV HOME=/home/ubuntu
 WORKDIR $HOME/speaches
 COPY --chown=ubuntu . .
 RUN uv pip install .[ui] --no-upgrade
-RUN uv pip list -n speaches-env
+RUN uv pip list
 
 RUN mkdir -p $HOME/.cache/huggingface/hub
 
