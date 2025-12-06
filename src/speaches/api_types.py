@@ -54,11 +54,16 @@ class TranscriptionSegment(BaseModel):
 
     @classmethod
     def from_faster_whisper_segments(
-        cls, segments: Iterable[faster_whisper.transcribe.Segment], diarization: list[dict]
+            cls,
+            segments: Iterable[faster_whisper.transcribe.Segment],
+            diarization: list[dict] | None = None,
     ) -> Iterable["TranscriptionSegment"]:
-        diarize_df = pd.DataFrame(diarization)
+        diarize_df = pd.DataFrame(diarization) if diarization else None
         for segment in segments:
-            speaker = assign_speaker(diarize_df, segment.start, segment.end)
+            if diarize_df is not None:
+                speaker = assign_speaker(diarize_df, segment.start, segment.end)
+            else:
+                speaker = None
             yield cls(
                 id=segment.id,
                 seek=segment.seek,
@@ -79,9 +84,7 @@ class TranscriptionSegment(BaseModel):
                         speaker=speaker,
                     )
                     for word in segment.words
-                ]
-                if segment.words is not None
-                else None,
+                ] if segment.words is not None else None,
             )
 
     @classmethod

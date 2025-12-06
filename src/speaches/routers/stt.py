@@ -164,9 +164,10 @@ def translate_file(
             all_set_segments.append(segments)
 
         grouped = defaultdict(list)
-        for seg in speaker_segments:
-            grouped[seg["speaker"]].append(seg)
-        diarize_groups = list(grouped.values())
+        if speaker_segments is not None:
+            for seg in speaker_segments:
+                grouped[seg["speaker"]].append(seg)
+            diarize_groups = list(grouped.values())
 
         all_segments = []
         if len(all_set_segments) == 2:
@@ -284,9 +285,10 @@ def transcribe_file(  # noqa: C901
                 all_set_segments.append(segments)
 
             grouped = defaultdict(list)
-            for seg in speaker_segments:
-                grouped[seg["speaker"]].append(seg)
-            diarize_groups = list(grouped.values())
+            if speaker_segments is not None:
+                for seg in speaker_segments:
+                    grouped[seg["speaker"]].append(seg)
+                diarize_groups = list(grouped.values())
 
             all_segments = []
             if len(all_set_segments) == 2:
