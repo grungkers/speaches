@@ -170,7 +170,7 @@ def translate_file(
             diarize_groups = list(grouped.values())
 
         all_segments = []
-        if len(all_set_segments) == 2 and len(diarize_groups) > 0:
+        if len(all_set_segments) == 2 and len(grouped) > 0:
             all_set_segments = [list(g) for g in all_set_segments]
             all_set_segments.sort(key=lambda group: group[0].start)
             for idx, segment in enumerate(all_set_segments):
@@ -291,7 +291,7 @@ def transcribe_file(  # noqa: C901
                 diarize_groups = list(grouped.values())
 
             all_segments = []
-            if len(all_set_segments) == 2 and len(diarize_groups) > 0:
+            if len(all_set_segments) == 2 and len(grouped) > 0:
                 all_set_segments = [list(g) for g in all_set_segments]
                 all_set_segments.sort(key=lambda group: group[0].start)
                 for idx, segment in enumerate(all_set_segments):
