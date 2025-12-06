@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=dustynv/pytorch:2.7-r36.4.0-cu128-24.04
+ARG BASE_IMAGE=torchcodec:r36.4.tegra-aarch64-cp312-cu126-24.04
 # hadolint ignore=DL3006
 FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/speaches-ai/speaches"
